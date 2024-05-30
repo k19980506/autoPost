@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useCallback } from "react";
 import {
   Container,
   Table,
@@ -56,48 +56,64 @@ const SchedulePage = () => {
   });
 
   const [day, setDay] = useState(1);
-  const [badResults, setBadResults] = useState([]);
-  const [scheduleData, setScheduleData] = useState([]);
-  const [loading, setLoading] = useState(false);
-
+  const [startIndex, setStartIndex] = useState(1);
   const incrementDate = useCallback((dateTime, days) => {
     const date = new Date(dateTime);
     date.setDate(date.getDate() + days);
     return toIsoString(date).slice(0, 16);
   }, []);
 
-  const handleChange = (event) => {
-    setDay(parseInt(event.target.value));
+  const [scheduleData, setScheduleData] = useState([
+    {
+      photoUrl: `facebook_${1}.jpg`,
+      publishImmediately: true,
+      publishTime: incrementDate(selectedTime, 1),
+      postContent: "",
+    },
+  ]);
+
+  const [loading, setLoading] = useState(false);
+
+  const handleDayChange = (event) => {
+    setDay(event.target.value);
+    setScheduleData(
+      Array.from(
+        { length: event.target.value },
+        (v, i) =>
+          scheduleData[i] || {
+            photoUrl: `facebook_${i + 1}.jpg`,
+            publishImmediately: i === 0,
+            publishTime: incrementDate(selectedTime, i),
+            postContent: "",
+          }
+      )
+    );
   };
 
-  useEffect(() => {
+  const handleSelectedTimeChange = (event) => {
+    const time = event.target.value;
+    setSelectedTime(time);
+
     setScheduleData((prevData) =>
       prevData.map((row, index) => ({
         ...row,
         publishTime: incrementDate(selectedTime, index),
       }))
     );
-  }, [selectedTime, incrementDate, setScheduleData]);
+  };
 
-  useEffect(() => {
+  const handleStartIndexChange = (event) => {
+    setStartIndex(event.target.value);
+
     setScheduleData(
-      Array.from({ length: day }, (_, index) =>
-        badResults[index]
-          ? {
-              photoUrl: badResults[index].data.photoUrl,
-              publishImmediately: badResults[index].data.publishImmediately,
-              publishTime: badResults[index].data.publishTime,
-              postContent: badResults[index].data.postContent,
-            }
-          : {
-              photoUrl: `facebook_${index + 1}.jpg`,
-              publishImmediately: index === 0,
-              publishTime: incrementDate(selectedTime, index),
-              postContent: "",
-            }
-      )
+      Array.from({ length: day }, (v, i) => {
+        return {
+          ...scheduleData[i],
+          photoUrl: `facebook_${parseInt(event.target.value) + i}.jpg`,
+        };
+      })
     );
-  }, [day, setScheduleData, badResults, incrementDate, selectedTime]);
+  };
 
   const handleSwitchChange = (index) => {
     setScheduleData((prevData) => {
@@ -158,7 +174,7 @@ const SchedulePage = () => {
       };
 
       const response = await fetch(
-        `https://graph.facebook.com/${process.env.REACT_APP_ID}/photos`,
+        `https://graph.facebook.com/v20.0/${process.env.REACT_APP_ID}/photos`,
         {
           method: "POST",
           body: JSON.stringify(postData),
@@ -198,8 +214,18 @@ const SchedulePage = () => {
     const successResult = results.filter((data) => data.success);
     const badResult = results.filter((data) => !data.success);
 
+    setScheduleData(
+      Array.from({ length: badResult.length }, (_, index) => {
+        return {
+          photoUrl: badResult[index].data.photoUrl,
+          publishImmediately: badResult[index].data.publishImmediately,
+          publishTime: badResult[index].data.publishTime,
+          postContent: badResult[index].data.postContent,
+        };
+      })
+    );
+
     setDay(badResult.length);
-    setBadResults(badResult);
     displayResults(successResult);
     setLoading(false);
   };
@@ -232,10 +258,17 @@ const SchedulePage = () => {
             label="選擇時間"
             type="datetime-local"
             value={selectedTime}
-            onChange={(e) => setSelectedTime(e.target.value)}
+            onChange={handleSelectedTimeChange}
             InputLabelProps={{
               shrink: true,
             }}
+          />
+
+          <TextField
+            label="照片編號"
+            type="numeric"
+            value={startIndex}
+            onChange={handleStartIndexChange}
           />
         </Stack>
         <Box sx={{ minWidth: 120 }}>
@@ -246,7 +279,7 @@ const SchedulePage = () => {
               id="demo-simple-select"
               value={day}
               label="篇數"
-              onChange={handleChange}
+              onChange={handleDayChange}
             >
               {Array.from({ length: 30 }, (_, index) => (
                 <MenuItem key={index + 1} value={index + 1}>
